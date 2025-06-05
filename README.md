@@ -1,79 +1,149 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# React Native Manual Push Integration for iOS (Objective-C)
 
-# Getting Started
+1. Replace the contents of the `AppcuesPush.swift` file we created on the call:
+    ```swift
+    import Foundation
+    import appcues_react_native
 
->**Note**: Make sure you have completed the [React Native - Environment Setup](https://reactnative.dev/docs/environment-setup) instructions till "Creating a new application" step, before proceeding.
+    @objc public class AppcuesPush: NSObject {
+        @objc public static func setPushToken(_ deviceToken: Data?) {
+            appcues_react_native.Implementation.setPushToken(deviceToken)
+        }
 
-## Step 1: Start the Metro Server
+        @objc public static func didReceiveNotification(
+            response: UNNotificationResponse,
+            withCompletionHandler completionHandler: @escaping () -> Void
+        ) -> Bool {
+            return appcues_react_native.Implementation.didReceiveNotification(response: response, completionHandler: completionHandler)
+        }
+    }
+    ```
 
-First, you will need to start **Metro**, the JavaScript _bundler_ that ships _with_ React Native.
+2. Update your `AppDelegate.mm` file. Make sure to remove any previous function calls to `AppcuesPush` that we may have tested on the call:
+    1. Ensure the Swift interfaces are still being imported: `#import "SLL-Swift.h"`
+    2. Update the implementation of `- (void)application:(UIApplication *)application didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken`. Add the following line at the top of the function:
+        ```objc
+        [AppcuesPush setPushToken:deviceToken];
+        ```
+    3. Update the implementation of `- (void)userNotificationCenter:(UNUserNotificationCenter *)center didReceiveNotificationResponse:(UNNotificationResponse *)response withCompletionHandler:(void (^)(void))completionHandler`. Add the following lines at the top of the function:
+        ```objc
+        if ([AppcuesPush didReceiveNotificationWithResponse:response withCompletionHandler:completionHandler]) {
+            // If Appcues handles it, return early
+            return;
+        }
+        ```
+    4. Ensure `- (void)userNotificationCenter:(UNUserNotificationCenter *)center willPresentNotification:(UNNotification *)notification withCompletionHandler:(void (^)(UNNotificationPresentationOptions options))completionHandler` is configured to show notifications when the app is in the foreground:
+        ```objc
+        // Decide if and how the notification will be shown to the user
+        if (@available(iOS 14.0, *)) {
+            completionHandler(UNNotificationPresentationOptionBanner | UNNotificationPresentationOptionList);  // iOS 14+
+        } else {
+            completionHandler(UNNotificationPresentationOptionAlert);  // Older iOS versions
+        }
+        ```
 
-To start Metro, run the following command from the _root_ of your React Native project:
+## Full Sample Code
 
-```bash
-# using npm
-npm start
+https://github.com/mmaatttt/rn-appcues-push-objc
+Commit with the specific changes: https://github.com/mmaatttt/rn-appcues-push-objc/commit/b9f10c93338fe6affc59487492e37bca5ba045ab
 
-# OR using Yarn
-yarn start
+`AppcuesPush.swift`
+```swift
+import Foundation
+import appcues_react_native
+
+@objc public class AppcuesPush: NSObject {
+  @objc public static func setPushToken(_ deviceToken: Data?) {
+    appcues_react_native.Implementation.setPushToken(deviceToken)
+  }
+
+  @objc public static func didReceiveNotification(
+    response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) -> Bool {
+    return appcues_react_native.Implementation.didReceiveNotification(response: response, completionHandler: completionHandler)
+  }
+}
 ```
 
-## Step 2: Start your Application
+`AppDelegate.mm`
+```objc
+#import "AppDelegate.h"
 
-Let Metro Bundler run in its _own_ terminal. Open a _new_ terminal from the _root_ of your React Native project. Run the following command to start your _Android_ or _iOS_ app:
+#import <React/RCTBundleURLProvider.h>
+#import <UserNotifications/UserNotifications.h>
+// STEP 2.1
+#import "SLL-Swift.h"
 
-### For Android
+@interface AppDelegate () <UNUserNotificationCenterDelegate>
+@end
 
-```bash
-# using npm
-npm run android
+@implementation AppDelegate
 
-# OR using Yarn
-yarn android
+- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
+{
+  self.moduleName = @"SLL";
+  // You can add your custom initial props in the dictionary below.
+  // They will be passed down to the ViewController used by React Native.
+  self.initialProps = @{};
+
+  UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+  center.delegate = self;
+  [application registerForRemoteNotifications];
+
+  return [super application:application didFinishLaunchingWithOptions:launchOptions];
+}
+
+- (NSURL *)sourceURLForBridge:(RCTBridge *)bridge
+{
+  return [self bundleURL];
+}
+
+- (NSURL *)bundleURL
+{
+#if DEBUG
+  return [[RCTBundleURLProvider sharedSettings] jsBundleURLForBundleRoot:@"index"];
+#else
+  return [[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"];
+#endif
+}
+
+- (void)application:(UIApplication *)application didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken {
+    // STEP 2.2
+    [AppcuesPush setPushToken:deviceToken];
+}
+
+- (void)application:(UIApplication *)application didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {
+  NSLog(@"%@", error.description);
+}
+
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center
+       didReceiveNotificationResponse:(UNNotificationResponse *)response
+             withCompletionHandler:(void (^)(void))completionHandler {
+
+  // STEP 2.3
+  if ([AppcuesPush didReceiveNotificationWithResponse:response withCompletionHandler:completionHandler]) {
+    // If Appcues handles it, return early
+    return;
+  }
+
+    completionHandler();  // If not handled by Appcues, complete the handler
+}
+
+// Called when a notification is delivered to a foreground app.
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center
+       willPresentNotification:(UNNotification *)notification
+         withCompletionHandler:(void (^)(UNNotificationPresentationOptions options))completionHandler
+{
+  // STEP 2.4
+  // Decide if and how the notification will be shown to the user
+  if (@available(iOS 14.0, *)) {
+      completionHandler(UNNotificationPresentationOptionBanner | UNNotificationPresentationOptionList);  // iOS 14+
+  } else {
+      completionHandler(UNNotificationPresentationOptionAlert);  // Older iOS versions
+  }
+}
+
+@end
+
 ```
-
-### For iOS
-
-```bash
-# using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
-```
-
-If everything is set up _correctly_, you should see your new app running in your _Android Emulator_ or _iOS Simulator_ shortly provided you have set up your emulator/simulator correctly.
-
-This is one way to run your app — you can also run it directly from within Android Studio and Xcode respectively.
-
-## Step 3: Modifying your App
-
-Now that you have successfully run the app, let's modify it.
-
-1. Open `App.tsx` in your text editor of choice and edit some lines.
-2. For **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Developer Menu** (<kbd>Ctrl</kbd> + <kbd>M</kbd> (on Window and Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (on macOS)) to see your changes!
-
-   For **iOS**: Hit <kbd>Cmd ⌘</kbd> + <kbd>R</kbd> in your iOS Simulator to reload the app and see your changes!
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [Introduction to React Native](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you can't get this to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
