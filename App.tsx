@@ -16,6 +16,7 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
+import * as Appcues from '@appcues/react-native';
 
 import {
   Colors,
@@ -61,6 +62,15 @@ function App(): React.JSX.Element {
   const backgroundStyle = {
     backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
   };
+
+  React.useEffect(() => {
+    const initializeSdk = async () => {
+      await Appcues.setup('103523', 'c8a61b90-45ec-4e3b-9c0f-472080fa7c23');
+      Appcues.debug();
+      Appcues.identify('some-user');
+    };
+    initializeSdk();
+  }, []);
 
   return (
     <SafeAreaView style={backgroundStyle}>
