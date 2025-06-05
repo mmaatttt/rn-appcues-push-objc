@@ -2,6 +2,7 @@
 
 #import <React/RCTBundleURLProvider.h>
 #import <UserNotifications/UserNotifications.h>
+#import "AwesomeProject-Swift.h"
 
 @interface AppDelegate () <UNUserNotificationCenterDelegate>
 @end
@@ -37,12 +38,17 @@
 }
 
 - (void)application:(UIApplication *)application didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken {
-
+    [AppcuesPush setPushToken:deviceToken];
 }
 
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center
        didReceiveNotificationResponse:(UNNotificationResponse *)response
              withCompletionHandler:(void (^)(void))completionHandler {
+
+  if ([AppcuesPush didReceiveNotificationWithResponse:response withCompletionHandler:completionHandler]) {
+    // If Appcues handles it, return early
+    return;
+  }
 
     completionHandler();  // If not handled by Appcues, complete the handler
 }
